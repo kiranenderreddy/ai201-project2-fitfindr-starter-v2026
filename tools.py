@@ -20,6 +20,7 @@ That last line is what your loop branches on. "Returns a list" earns nothing —
 the description has to say what is *in* the list.
 """
 
+import re
 import config  # noqa: F401 — you'll use this in search_listings
 from generate import generate
 from utils.data_loader import load_listings
@@ -79,7 +80,69 @@ def search_listings(
         python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
     """
     # TODO: replace this with your implementation
-    return []
+
+    listings = load_listings()
+
+    def tokenize(text: str) -> set[str]:
+        return set(
+            re.findall(
+                r"[a-z]+[0-9]*|\d+(?:\.\d+)?",
+                text.lower()
+            )
+        )
+
+    query_tokens = tokenize(description)
+    matches = []
+
+    for listing in listings:
+
+        # Filter by maximum price when provided
+        if max_price is not None and listing["price"] > max_price:
+            continue
+
+        # Filter by size when provided
+        if size is not None:
+            requested_size = tokenize(size)
+            listing_size = tokenize(listing["size"])
+
+            if not requested_size.intersection(listing_size):
+                continue
+
+        # Combine searchable listing fields
+        searchable_text = " ".join([
+            listing.get("title", ""),
+            listing.get("description", ""),
+            listing.get("category", ""),
+            " ".join(listing.get("style_tags", [])),
+            " ".join(listing.get("colors", [])),
+            listing.get("brand") or "",
+            listing.get("platform", ""),
+        ])
+
+        listing_tokens = tokenize(searchable_text)
+
+        # Score by number of query keywords found
+        score = len(
+            query_tokens.intersection(listing_tokens)
+        )
+
+        # Drop zero-score results
+        if score == 0:
+            continue
+
+        matches.append((score, listing))
+
+    # Best match first
+    matches.sort(
+        key=lambda result: result[0],
+        reverse=True
+    )
+
+    return [
+        listing
+        for score, listing
+        in matches[:config.SEARCH_RESULT_LIMIT]
+    ]
 
 
 # ── Tool 2: suggest_outfit ────────────────────────────────────────────────────
@@ -113,7 +176,67 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
         python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[0], get_example_wardrobe()))"
     """
     # TODO: replace this with your implementation
-    return ""
+
+    items = wardrobe.get("items", [])
+
+    if not items:
+        prompt = f"""
+You are a fashion styling assistant.
+
+The user is considering this thrifted item:
+
+Title: {new_item.get("title")}
+Category: {new_item.get("category")}
+Colors: {new_item.get("colors")}
+Style tags: {new_item.get("style_tags")}
+Price: ${new_item.get("price")}
+
+The user's wardrobe is empty.
+
+Give one or two practical general styling ideas for this item.
+Keep the response concise and useful.
+"""
+
+        return generate(prompt)
+
+    wardrobe_lines = []
+
+    for item in items:
+        wardrobe_lines.append(
+            f"- {item.get('name')} | "
+            f"category: {item.get('category')} | "
+            f"colors: {item.get('colors')} | "
+            f"style tags: {item.get('style_tags')} | "
+            f"notes: {item.get('notes', '')}"
+        )
+
+    wardrobe_text = "\n".join(wardrobe_lines)
+
+    prompt = f"""
+You are a fashion styling assistant.
+
+The user is considering this thrifted item:
+
+Title: {new_item.get("title")}
+Category: {new_item.get("category")}
+Colors: {new_item.get("colors")}
+Style tags: {new_item.get("style_tags")}
+Price: ${new_item.get("price")}
+
+The user already owns these wardrobe items:
+
+{wardrobe_text}
+
+Suggest one or two outfits that combine the new item with specific pieces
+from the user's existing wardrobe.
+
+Name the wardrobe pieces you selected and briefly explain why they work
+together.
+
+Keep the response concise.
+"""
+
+    return generate(prompt)
 
 
 # ── Tool 3: create_fit_card ───────────────────────────────────────────────────
@@ -153,4 +276,37 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
         python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('jeans and white sneakers', load_listings()[0]))"
     """
     # TODO: replace this with your implementation
-    return ""
+
+    if not outfit or not outfit.strip():
+        return (
+            "A fit card could not be created because no outfit "
+            "suggestion was provided."
+        )
+
+    prompt = f"""
+Write a short social-media-style fit card for this thrift find.
+
+Selected item:
+
+Title: {new_item.get("title")}
+Price: ${new_item.get("price")}
+Platform: {new_item.get("platform")}
+Category: {new_item.get("category")}
+Colors: {new_item.get("colors")}
+Style tags: {new_item.get("style_tags")}
+
+Outfit suggestion:
+
+{outfit}
+
+Requirements:
+- Write 2 to 4 sentences.
+- Mention the selected item.
+- Mention its price exactly once.
+- Mention its platform exactly once.
+- Include at least one specific styling detail from the outfit suggestion.
+- Describe the overall vibe.
+- Make it sound like a caption someone would actually post.
+"""
+
+    return generate(prompt)
