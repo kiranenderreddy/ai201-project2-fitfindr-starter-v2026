@@ -310,3 +310,49 @@ Requirements:
 """
 
     return generate(prompt)
+
+
+# ── Stretch Tool 4: compare_prices ────────────────────────────────────────────
+
+def compare_prices(selected_item: dict, search_results: list[dict]) -> str:
+    """
+    Compare the selected item's price with the other matching search results.
+
+    Args:
+        selected_item: the listing selected by the agent.
+        search_results: all listings returned by search_listings().
+
+    Returns:
+        A short string explaining how the selected item's price compares
+        with the average price of the matching listings.
+    """
+
+    if not search_results:
+        return "No matching listings are available for price comparison."
+
+    prices = [
+        listing["price"]
+        for listing in search_results
+        if "price" in listing
+    ]
+
+    if not prices:
+        return "No price information is available for comparison."
+
+    selected_price = selected_item["price"]
+    average_price = sum(prices) / len(prices)
+
+    difference = selected_price - average_price
+
+    if abs(difference) < 0.01:
+        comparison = "about the same as"
+    elif difference < 0:
+        comparison = "cheaper than"
+    else:
+        comparison = "more expensive than"
+
+    return (
+        f"{selected_item['title']} costs ${selected_price:.2f}, which is "
+        f"{comparison} the average matching-listing price of "
+        f"${average_price:.2f}."
+    )

@@ -198,14 +198,27 @@ Nothing beats a classic pair of Vintage Levi's 501 Jeans in that perfect medium 
 
 ## Stretch Feature — Fourth Tool
 
-I am adding a fourth tool called `compare_prices`.
+I added a fourth tool called `compare_prices`.
 
 `compare_prices(selected_item, search_results)` compares the selected listing
 with the other matching listings and returns a `str` explaining how the
-selected item's price compares with the other search results.
+selected item's price compares with the average price of the matching listings.
 
-The agent will call this tool after selecting a listing and before generating
-the outfit suggestion.
+The agent calls this tool after selecting a listing and before generating the
+outfit suggestion.
+
+**Example run:**
+
+```text
+=== A query the data can match ===
+found: Y2K Baby Tee — Butterfly Print — $18.0 on depop
+price: Y2K Baby Tee — Butterfly Print costs $18.00, which is cheaper than the average matching-listing price of $21.30.
+outfit: Here are two ways to style your new Y2K baby tee using pieces from your wardrobe:
+fit card: Channel major early 2000s energy with this Y2K butterfly print baby tee, available on depop now for just $18.0!
+
+=== A query it can't ===
+stopped: I couldn't find a matching item. Try increasing your maximum price, changing the size, or using broader search terms.
+fit_card is None — it should still be None here
 
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═════════════════
 ══════

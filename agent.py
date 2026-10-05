@@ -17,7 +17,12 @@ import re
 
 import config
 import trace
-from tools import search_listings, suggest_outfit, create_fit_card
+from tools import (
+    search_listings,
+    suggest_outfit,
+    create_fit_card,
+    compare_prices,
+)
 from generate import ModelUnavailable
 
 
@@ -39,9 +44,10 @@ def new_session(query: str, wardrobe: dict) -> dict:
     """
     return {
         "query": query,              # what the user typed
-        "parsed": {},                # description / size / max_price you pulled out of it
+        "parsed": {},                # description / size / max_price
         "search_results": [],        # everything search_listings returned
-        "selected_item": None,       # the one you chose — goes into suggest_outfit
+        "selected_item": None,       # the one chosen from search results
+        "price_comparison": None,    # stretch tool result
         "wardrobe": wardrobe,        # the user's wardrobe
         "outfit_suggestion": None,   # what suggest_outfit returned
         "fit_card": None,            # what create_fit_card returned
@@ -62,53 +68,14 @@ def run_agent(query: str, wardrobe: dict) -> dict:
                   get_empty_wardrobe() from utils/data_loader.py.
 
     Returns:
-        The session dict. **Check session["error"] first** — if it isn't None,
+        The session dict. Check session["error"] first — if it isn't None,
         the run ended early and the later fields will still be None.
-
-    ────────────────────────────────────────────────────────────────────────────
-    TODO — build this, following the branch rule you wrote in Milestone 2.
-
-      1. Start a session with new_session().
-
-      2. Count the times round the loop, and call trace.check_iterations(count)
-         on each one before you go again. It raises when the count passes
-         MAX_ITERATIONS in config.py — see trace.py.
-
-      3. Parse the query into a description, a size, and a max_price. Regex,
-         string splitting, or asking the model are all fine — say which you
-         chose in your README. Put the result in session["parsed"].
-
-      4. Call search_listings() with what you parsed.
-         Put the results in session["search_results"].
-
-         ⚠️ THIS IS THE BRANCH. If nothing came back:
-              - put a message in session["error"] saying what the user could
-                change — "No results" is not that message
-              - return the session
-              - do NOT call suggest_outfit with nothing
-
-      5. Choose an item — the first result is fine. Put it in
-         session["selected_item"].
-
-      6. Call suggest_outfit() with the selected item and the wardrobe.
-         Put the result in session["outfit_suggestion"].
-
-      7. Call create_fit_card() with the outfit and the item.
-         Put the result in session["fit_card"].
-
-      8. Return the session.
-
-    ────────────────────────────────────────────────────────────────────────────
-    IN UNIT 4 you come back and add two things:
-
-      • Trace calls. One per step. `trace.step("search_listings", inputs=...,
-        returned=...)` — see trace.py. Your README needs the output.
-
-      • A handler for ModelUnavailable, so a bad key produces a message rather
-        than a stack trace. The import is already at the top of this file.
     """
 
+    # ------------------------------------------------------------------
     # 1. Start a fresh session
+    # ------------------------------------------------------------------
+
     session = new_session(query, wardrobe)
 
     # ------------------------------------------------------------------
@@ -118,7 +85,7 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     max_price = None
     size = None
 
-    # Example matches:
+    # Examples:
     # under $30
     # below 30
     # up to $40
@@ -132,7 +99,7 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     if price_match:
         max_price = float(price_match.group(1))
 
-    # Example matches:
+    # Examples:
     # size M
     # size S/M
     # size XL
@@ -150,7 +117,7 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     # Start with the original query
     description = query
 
-    # Remove price phrase from the description
+    # Remove price phrase
     if price_match:
         description = (
             description[:price_match.start()]
@@ -186,7 +153,7 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         flags=re.IGNORECASE,
     )
 
-    # Store parsed values in the session
+    # Save parsed values in session
     session["parsed"] = {
         "description": description,
         "size": size,
@@ -203,8 +170,6 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     while step != "done":
 
         iteration_count += 1
-
-        # Prevent the loop from running forever
         trace.check_iterations(iteration_count)
 
         # --------------------------------------------------------------
@@ -221,7 +186,7 @@ def run_agent(query: str, wardrobe: dict) -> dict:
             # ----------------------------------------------------------
             # REQUIRED BRANCH
             # ----------------------------------------------------------
-            # If search returned nothing, STOP here.
+            # If nothing matched, stop immediately.
             if not session["search_results"]:
 
                 session["error"] = (
@@ -232,10 +197,23 @@ def run_agent(query: str, wardrobe: dict) -> dict:
 
                 return session
 
-            # Choose the first/best search result
+            # Choose first / best result
             session["selected_item"] = session["search_results"][0]
 
-            # Decide what happens next
+            # Move to stretch tool
+            step = "price_comparison"
+            continue
+
+        # --------------------------------------------------------------
+        # STRETCH STEP — Compare prices
+        # --------------------------------------------------------------
+        if step == "price_comparison":
+
+            session["price_comparison"] = compare_prices(
+                session["selected_item"],
+                session["search_results"],
+            )
+
             step = "outfit"
             continue
 
@@ -244,7 +222,6 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         # --------------------------------------------------------------
         if step == "outfit":
 
-            # Read values FROM THE SESSION
             session["outfit_suggestion"] = suggest_outfit(
                 session["selected_item"],
                 session["wardrobe"],
@@ -258,7 +235,6 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         # --------------------------------------------------------------
         if step == "fit_card":
 
-            # Again, read values FROM THE SESSION
             session["fit_card"] = create_fit_card(
                 session["outfit_suggestion"],
                 session["selected_item"],
@@ -266,7 +242,6 @@ def run_agent(query: str, wardrobe: dict) -> dict:
 
             step = "done"
 
-    # Return the completed session
     return session
 
 
@@ -288,6 +263,7 @@ def _show(session: dict) -> None:
         f"${item.get('price')} on {item.get('platform')}"
     )
 
+    print(f"  price:    {session['price_comparison']}")
     print(f"  outfit:   {session['outfit_suggestion']}")
     print(f"  fit card: {session['fit_card']}")
 
