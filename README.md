@@ -207,7 +207,8 @@ selected item's price compares with the other search results.
 The agent will call this tool after selecting a listing and before generating
 the outfit suggestion.
 
-<!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
+<!-- ═══════════════════════ UNIT 4 — THE TEST ═════════════════
+══════
 
      Don't fill these in during unit 3.
      ═══════════════════════════════════════════════════════════════════ -->
