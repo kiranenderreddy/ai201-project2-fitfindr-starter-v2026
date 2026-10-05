@@ -196,6 +196,17 @@ Nothing beats a classic pair of Vintage Levi's 501 Jeans in that perfect medium 
 - **What came back:** The loop searched first, checked whether results were empty, stored the selected item in session state, then called the outfit and fit-card tools using values read back from the session.
 - **What I changed:** I added a useful early-stop message telling the user to change the price, size, or search terms instead of returning only "No results."
 
+## Stretch Feature — Fourth Tool
+
+I am adding a fourth tool called `compare_prices`.
+
+`compare_prices(selected_item, search_results)` compares the selected listing
+with the other matching listings and returns a `str` explaining how the
+selected item's price compares with the other search results.
+
+The agent will call this tool after selecting a listing and before generating
+the outfit suggestion.
+
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
      Don't fill these in during unit 3.
