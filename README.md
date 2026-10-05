@@ -40,6 +40,7 @@
 ## What This Does
 
 <!-- Three or four sentences: what a user asks for, and what they get back. -->
+FitFindr is a thrift-shopping agent that helps a user search for an item based on description, size, and price. It searches available listings, selects the best matching item, and uses the user's existing wardrobe to suggest an outfit. It then creates a short social-media-style fit card. If no listing matches, the agent stops early and tells the user what they can change in their search.
 
 
 
@@ -61,13 +62,15 @@
 
 **When nothing matches:** Returns an empty list `[]`.
 
+**Size matching:** Sizes are compared case-insensitively using tokens, so a requested `M` can match `S/M` without using unsafe substring matching.
+
 ### suggest_outfit
 
 **What it does:** Uses the selected new item and the user's wardrobe to suggest an outfit that goes with the item.
 
 **Inputs:**
 - `new_item` (`dict`) — the listing selected by the agent.
-- `wardrobe` (`list`) — a list of wardrobe item dictionaries.
+- `wardrobe` (`dict`) — a wardrobe dictionary containing an `items` list.
 
 **Returns:** A `str` containing an outfit suggestion using the selected listing and wardrobe items.
 
@@ -85,7 +88,7 @@
 
 **Returns:** A `str` containing a short, post-ready fit-card caption.
 
-**When it has insufficient information:** Returns a `str` explaining that a fit card could not be created instead of crashing.
+**When the outfit is empty:** If `outfit` is empty or whitespace, returns a descriptive `str` explaining that a fit card could not be created instead of crashing.
 
 ## Planning Loop
 
@@ -95,44 +98,83 @@
 
 **Where it lives:** `agent.py::run_agent`
 
-**How the query is parsed:** <!-- regex, string splitting, or asking the model — say which -->
+**How the query is parsed:** The agent uses regular expressions to extract the optional size and maximum price from the user's query. The remaining text is cleaned and used as the search description.
 
-**What moves through the session:** <!-- which fields, in what order -->
+**What moves through the session:** The parsed query is stored in `session["parsed"]`, search results go into `session["search_results"]`, the first result is stored in `session["selected_item"]`, the outfit is stored in `session["outfit_suggestion"]`, and the final caption is stored in `session["fit_card"]`.
 
 ---
 
 ## Sample Run
 
-<!-- Two things go here.
-
-     1. One FULL query and its output, pasted as text.
-     2. Your three per-tool terminal tests — the command and what it printed. -->
-
 **One full query**
 
-```
-$ python app.py ask '...'
+```text
+$ python agent.py
 
+=== A query the data can match ===
+found: Y2K Baby Tee — Butterfly Print — $18.0 on depop
+
+outfit: Here are two ways to style your new Y2K baby tee using pieces from your wardrobe:
+
+Outfit 1: Sweet & Edgy Streetwear
+- Y2K Baby Tee — Butterfly Print
+- Baggy straight-leg jeans
+- Vintage black denim jacket
+- Chunky white sneakers
+- Black crossbody bag
+
+Outfit 2: Casual Contrast (Y2K Meets Earth Tones)
+- Y2K Baby Tee — Butterfly Print
+- Wide-leg khaki trousers
+- Chunky white sneakers
+- Brown leather belt
+- Black crossbody bag
+
+fit card: Channel major early 2000s energy with this Y2K butterfly print baby tee, available on depop now for just $18.0! Style it with baggy dark-wash jeans and a vintage denim jacket for the ultimate sweet-and-edgy streetwear fit. It's giving effortless retro cool-girl vibes all season long.
+
+=== A query it can't ===
+stopped: I couldn't find a matching item. Try increasing your maximum price, changing the size, or using broader search terms.
+fit_card is None — it should still be None here
+
+The second one should stop before the fit card. If both paths look the same,
+the branch isn't doing anything yet.
 ```
 
 **The three tools, tested one at a time**
 
-```
+```text
 $ python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
 
+Returned matching listings including:
+- Y2K Baby Tee — Butterfly Print — $18.0
+- Graphic Tee — 2003 Tour Bootleg Style — $24.0
+- Vintage Band Tee — Faded Grey — $19.0
+
+All returned listings were at or below the $30 maximum price.
 ```
 
-```
-$ python -c "from tools import suggest_outfit; ..."
+```text
+$ python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[0], get_example_wardrobe()))"
 
+Here are two outfit combinations using the vintage Levi's 501 jeans and pieces from your current wardrobe:
+
+Outfit 1: Effortless Casual Streetwear
+- White ribbed tank top
+- Chunky white sneakers
+- Brown leather belt
+- Black crossbody bag
+
+Outfit 2: Cozy Layered Grunge
+- Oversized grey crewneck sweatshirt
+- Vintage black denim jacket
+- Black combat boots
 ```
 
-```
-$ python -c "from tools import create_fit_card; ..."
+```text
+$ python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('jeans and white sneakers', load_listings()[0]))"
 
+Nothing beats a classic pair of Vintage Levi's 501 Jeans in that perfect medium indigo wash. Grab these on Depop right now for just $38.0 to instantly nail that effortless streetwear vibe. Style them with crisp white sneakers for the ultimate off-duty look that goes with everything.
 ```
-
----
 
 ## How I Used AI
 
@@ -142,18 +184,17 @@ $ python -c "from tools import create_fit_card; ..."
 
      "I gave Claude my search_listings spec. It returned None on no match
      instead of an empty list, so I changed it" is the level we want. -->
-
 **Moment 1**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- **What I asked for:** I asked AI to help implement `search_listings` while following the starter requirements for description, size, and maximum-price filtering.
+- **What came back:** The suggested implementation tokenized listing text, filtered deterministic fields first, ranked results using keyword overlap, and returned an empty list when nothing matched.
+- **What I changed:** I kept the starter function signature and data loader and used token-based size matching instead of a simple substring match to avoid incorrect size matches.
 
 **Moment 2**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- **What I asked for:** I asked AI to help build the planning loop while keeping state visible in the session dictionary.
+- **What came back:** The loop searched first, checked whether results were empty, stored the selected item in session state, then called the outfit and fit-card tools using values read back from the session.
+- **What I changed:** I added a useful early-stop message telling the user to change the price, size, or search terms instead of returning only "No results."
 
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
