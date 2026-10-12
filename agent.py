@@ -1,16 +1,10 @@
 """
 The FitFindr planning loop.
 
-This is the file that makes FitFindr an agent rather than a script. It decides
-which tool to run next based on what the last one returned.
-
-If your loop calls all three tools no matter what comes back, you have a list
-of function calls. A loop looks at the last result before it picks the next
-step. That branch is the graded part of this unit.
-
-Build and test your three tools in `tools.py` first. Then come here.
-
-    python agent.py          runs both example paths below
+Unit 4 adds:
+- search_listings through MCP
+- trace steps for every tool call
+- ModelUnavailable handling
 """
 
 import re
@@ -31,13 +25,6 @@ from generate import ModelUnavailable
 # ── session state ──────────────────────────────────────────────────────────────
 
 def new_session(query: str, wardrobe: dict) -> dict:
-    """
-    A fresh session for one user interaction.
-
-    The session is the single source of truth for a run. Every tool result goes
-    in here, and the next tool reads it back out.
-    """
-
     return {
         "query": query,
         "parsed": {},
@@ -54,36 +41,19 @@ def new_session(query: str, wardrobe: dict) -> dict:
 # ── planning loop ──────────────────────────────────────────────────────────────
 
 def run_agent(query: str, wardrobe: dict) -> dict:
-    """
-    Run the FitFindr planning loop once and return the finished session.
 
-    Args:
-        query: What the user asked for in plain language.
-        wardrobe: A wardrobe dictionary.
-
-    Returns:
-        The completed session dictionary.
-    """
-
-    # ------------------------------------------------------------------
-    # 1. Start a fresh session
-    # ------------------------------------------------------------------
+    # Start a fresh trace for every run
+    trace.start_trace()
 
     session = new_session(query, wardrobe)
 
     # ------------------------------------------------------------------
-    # 2. Parse the user's query
+    # Parse query
     # ------------------------------------------------------------------
 
     max_price = None
     size = None
 
-    # Examples:
-    # under $30
-    # below 30
-    # up to $40
-    # max $50
-    # maximum $50
     price_match = re.search(
         r"(?:under|below|up to|max(?:imum)?)\s*\$?\s*(\d+(?:\.\d+)?)",
         query,
@@ -93,12 +63,6 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     if price_match:
         max_price = float(price_match.group(1))
 
-    # Examples:
-    # size M
-    # size S/M
-    # size XL
-    # size W30
-    # size XXS
     size_match = re.search(
         r"\bsize\s+([A-Za-z0-9/.+-]+)",
         query,
@@ -108,10 +72,8 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     if size_match:
         size = size_match.group(1)
 
-    # Start with the original query
     description = query
 
-    # Remove price phrase
     if price_match:
         description = (
             description[:price_match.start()]
@@ -119,7 +81,6 @@ def run_agent(query: str, wardrobe: dict) -> dict:
             + description[price_match.end():]
         )
 
-    # Remove size phrase
     description = re.sub(
         r"\bsize\s+[A-Za-z0-9/.+-]+",
         " ",
@@ -127,7 +88,6 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         flags=re.IGNORECASE,
     )
 
-    # Remove common conversational filler
     description = re.sub(
         r"\b(?:looking\s+for|i\s+want|i'm\s+looking\s+for|find\s+me)\b",
         " ",
@@ -135,11 +95,9 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         flags=re.IGNORECASE,
     )
 
-    # Remove extra commas and spaces
     description = re.sub(r",+", " ", description)
     description = re.sub(r"\s+", " ", description).strip()
 
-    # Remove leading "a" or "an"
     description = re.sub(
         r"^(?:a|an)\s+",
         "",
@@ -147,7 +105,6 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         flags=re.IGNORECASE,
     )
 
-    # Store parsed values in session
     session["parsed"] = {
         "description": description,
         "size": size,
@@ -155,7 +112,7 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     }
 
     # ------------------------------------------------------------------
-    # 3. Planning loop
+    # Planning loop
     # ------------------------------------------------------------------
 
     step = "search"
@@ -166,24 +123,23 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         iteration_count += 1
         trace.check_iterations(iteration_count)
 
-        # --------------------------------------------------------------
-        # STEP 1 — Search listings through MCP
-        # --------------------------------------------------------------
+        # ==============================================================
+        # STEP 1 — Search through MCP
+        # ==============================================================
         if step == "search":
+
+            search_inputs = {
+                "description": session["parsed"]["description"],
+                "size": session["parsed"]["size"],
+                "max_price": session["parsed"]["max_price"],
+            }
 
             session["search_results"] = call_tool(
                 "search_listings",
-                {
-                    "description": session["parsed"]["description"],
-                    "size": session["parsed"]["size"],
-                    "max_price": session["parsed"]["max_price"],
-                },
+                search_inputs,
             )
 
-            # ----------------------------------------------------------
-            # REQUIRED BRANCH
-            # ----------------------------------------------------------
-            # If nothing matched, stop immediately.
+            # Required empty-search branch
             if not session["search_results"]:
 
                 session["error"] = (
@@ -192,49 +148,127 @@ def run_agent(query: str, wardrobe: dict) -> dict:
                     "search terms."
                 )
 
+                trace.step(
+                    "search_listings (via MCP)",
+                    inputs=search_inputs,
+                    returned=session["search_results"],
+                    note="branch: empty search, stopping",
+                )
+
                 return session
 
-            # Choose the first / best result
+            trace.step(
+                "search_listings (via MCP)",
+                inputs=search_inputs,
+                returned=session["search_results"],
+            )
+
             session["selected_item"] = session["search_results"][0]
 
-            # Move to stretch tool
             step = "price_comparison"
             continue
 
-        # --------------------------------------------------------------
-        # STRETCH STEP — Compare prices
-        # --------------------------------------------------------------
+        # ==============================================================
+        # STRETCH TOOL — Compare prices
+        # ==============================================================
         if step == "price_comparison":
+
+            compare_inputs = {
+                "selected_item": session["selected_item"],
+                "search_results": session["search_results"],
+            }
 
             session["price_comparison"] = compare_prices(
                 session["selected_item"],
                 session["search_results"],
             )
 
+            trace.step(
+                "compare_prices",
+                inputs=compare_inputs,
+                returned=session["price_comparison"],
+            )
+
             step = "outfit"
             continue
 
-        # --------------------------------------------------------------
+        # ==============================================================
         # STEP 2 — Suggest outfit
-        # --------------------------------------------------------------
+        # ==============================================================
         if step == "outfit":
 
-            session["outfit_suggestion"] = suggest_outfit(
-                session["selected_item"],
-                session["wardrobe"],
+            outfit_inputs = {
+                "new_item": session["selected_item"],
+                "wardrobe": session["wardrobe"],
+            }
+
+            try:
+                session["outfit_suggestion"] = suggest_outfit(
+                    session["selected_item"],
+                    session["wardrobe"],
+                )
+
+            except ModelUnavailable as exc:
+
+                session["error"] = (
+                    "The styling model couldn't be reached. "
+                    "Check your GEMINI_API_KEY and try again."
+                )
+
+                trace.step(
+                    "suggest_outfit",
+                    inputs=outfit_inputs,
+                    returned=str(exc),
+                    note="model unavailable, stopping",
+                )
+
+                return session
+
+            trace.step(
+                "suggest_outfit",
+                inputs=outfit_inputs,
+                returned=session["outfit_suggestion"],
             )
 
             step = "fit_card"
             continue
 
-        # --------------------------------------------------------------
+        # ==============================================================
         # STEP 3 — Create fit card
-        # --------------------------------------------------------------
+        # ==============================================================
         if step == "fit_card":
 
-            session["fit_card"] = create_fit_card(
-                session["outfit_suggestion"],
-                session["selected_item"],
+            fit_card_inputs = {
+                "outfit": session["outfit_suggestion"],
+                "new_item": session["selected_item"],
+            }
+
+            try:
+                session["fit_card"] = create_fit_card(
+                    session["outfit_suggestion"],
+                    session["selected_item"],
+                )
+
+            except ModelUnavailable as exc:
+
+                session["error"] = (
+                    "The fit-card model couldn't be reached. "
+                    "Check your GEMINI_API_KEY and try again."
+                )
+
+                trace.step(
+                    "create_fit_card",
+                    inputs=fit_card_inputs,
+                    returned=str(exc),
+                    note="model unavailable, stopping",
+                )
+
+                return session
+
+            trace.step(
+                "create_fit_card",
+                inputs=fit_card_inputs,
+                returned=session["fit_card"],
             )
 
             step = "done"
@@ -242,15 +276,12 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     return session
 
 
-# ── running it directly ────────────────────────────────────────────────────────
+# ── running directly ──────────────────────────────────────────────────────────
 
 def _show(session: dict) -> None:
+
     if session["error"]:
         print(f"  stopped: {session['error']}")
-        print(
-            f"  fit_card is {session['fit_card']!r} "
-            "— it should still be None here"
-        )
         return
 
     item = session["selected_item"] or {}
@@ -266,6 +297,7 @@ def _show(session: dict) -> None:
 
 
 if __name__ == "__main__":
+
     from utils.data_loader import get_example_wardrobe
 
     print("=== A query the data can match ===")
@@ -284,9 +316,4 @@ if __name__ == "__main__":
             query="designer ballgown size XXS under $5",
             wardrobe=get_example_wardrobe(),
         )
-    )
-
-    print(
-        "\nThe second one should stop before the fit card. If both paths look "
-        "the same,\nthe branch isn't doing anything yet."
     )

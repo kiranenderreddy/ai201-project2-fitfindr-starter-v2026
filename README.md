@@ -290,38 +290,53 @@ that produced it:
 
 ## Loop Trace
 
-<!-- One full run, printed step by step, with the MCP call visible in it.
+### Happy path
 
-     `python app.py ask '...' --trace` once you've added the trace.step()
-     calls in Milestone 2.
+```text
+[1] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: 10 items: Y2K Baby Tee — Butterfly Print, Graphic Tee — 2003 Tour Bootleg Style, Vintage Band Tee — Faded Grey … +7 more
 
-     Worth pasting BOTH the happy path and the empty-search path. The empty
-     one should be visibly shorter, because it stops. If your two traces are
-     the same length, your branch isn't working — and this is the fastest way
-     anyone will ever find that out. -->
+[2] compare_prices
+      in:  dict with keys: selected_item, search_results
+      out: Y2K Baby Tee — Butterfly Print costs $18.00, which is cheaper than the average matching-listing price of $21.30...
 
-**Happy path**
+[3] suggest_outfit
+      in:  dict with keys: new_item, wardrobe
+      out: Here are two ways to style your new Y2K baby tee using pieces from your wardrobe...
 
+[4] create_fit_card
+      in:  dict with keys: outfit, new_item
+      out: Channel major early 2000s energy with this Y2K butterfly print baby tee...
 ```
 
+### Empty search
+
+```text
+[1] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: [] (empty)
+      →    branch: empty search, stopping
+
+I couldn't find a matching item. Try increasing your maximum price,
+changing the size, or using broader search terms.
 ```
 
-**Empty search**
+### Failure-mode checks
 
-```
+- **Empty search:** The agent stopped after `search_listings` and told the user to change the price, size, or search terms.
+- **Empty wardrobe:** The agent returned general styling advice and still created a fit card.
+- **Model unavailable:** The agent reported that the model could not be reached and told the user to check `GEMINI_API_KEY` and try again.
 
-```
+### On the MCP move
 
-**On the MCP move:** <!-- what changed in your code, and whether anything
-behaved differently afterwards. If the rewire didn't work, say exactly where it
-broke — the error text and the last thing that worked. That earns the point in
-full. -->
-
-
+`search_listings` was moved from a direct Python function call to an MCP tool call through `mcp_client.call_tool`. The search results and normal agent behavior remained the same; only the way the search tool is invoked changed.
 
 ---
 
 ## The Improvement
+
+
 
 <!-- What you changed, why your diagnosis pointed at it, and the after-run in
      the same table format. One change, measured properly.
