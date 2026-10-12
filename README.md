@@ -192,9 +192,9 @@ Nothing beats a classic pair of Vintage Levi's 501 Jeans in that perfect medium 
 
 **Moment 2**
 
-- **What I asked for:** I asked AI to help build the planning loop while keeping state visible in the session dictionary.
-- **What came back:** The loop searched first, checked whether results were empty, stored the selected item in session state, then called the outfit and fit-card tools using values read back from the session.
-- **What I changed:** I added a useful early-stop message telling the user to change the price, size, or search terms instead of returning only "No results."
+-- **What I asked for:** I asked AI to help me interpret the five-run evaluation results, compare each result against the acceptance criteria, and identify one improvement that followed from the evaluation.
+- **What came back:** AI helped organize the before-run evidence, verify the selected-item state and maximum-price filtering, and pointed out that the fit-card criterion was the most model-dependent part of the system.
+- **What I changed:** I did not change the acceptance criteria after seeing the results. I kept the original baseline, strengthened only the `create_fit_card` prompt so it explicitly requires a named wardrobe piece or concrete styling detail, and then ran the complete evaluation again with caching disabled.
 
 ## Stretch Feature — Fourth Tool
 
