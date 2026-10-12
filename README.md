@@ -230,32 +230,98 @@ fit_card is None — it should still be None here
 
 ## Run Log — Before
 
-<!-- Five criteria, five tries each, in this exact format.
-
-     Five, because your criteria are written out of five. Mark each try PASS
-     or FAIL, count the passes, and read that count against your target — a
-     row targeting 4 of 5 with three PASS cells is MISSED (3/5).
-
-     `python run_eval.py --label before` runs everything and writes the table
-     into results/. Paste it here and fill in the verdicts. -->
-
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
+| 1. Matching query completes all three required tools and returns a fit card | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 2. Impossible query stops before suggest_outfit and returns an actionable message | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 3. Selected listing is preserved through session state and passed to suggest_outfit | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 4. Fit card includes the selected item and at least one specific styling detail from the outfit suggestion | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 5. Search results respect the requested maximum price | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
 
-**Real output from one try**, pasted as text, naming the file and function
-that produced it:
+### Real output from one try
 
+**Criterion 1 — `agent.py::run_agent` through `run_eval.py`**
+
+```text
+[1] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: 10 items: Y2K Baby Tee — Butterfly Print, Graphic Tee — 2003 Tour Bootleg Style, Vintage Band Tee — Faded Grey … +7 more
+[2] compare_prices
+      in:  dict with keys: selected_item, search_results
+      out: Y2K Baby Tee — Butterfly Print costs $18.00, which is cheaper than the average matching-listing price of $21.3…
+[3] suggest_outfit
+      in:  dict with keys: new_item, wardrobe
+      out: Here are two outfit combinations using your new Y2K baby tee...
+[4] create_fit_card
+      in:  dict with keys: outfit, new_item
+      out: Channel your inner 2000s icon with this adorable Y2K Butterfly Baby Tee...
+
+try 1: completed — fit card 304 chars
 ```
 
+**Criterion 2 — `agent.py::run_agent` empty-search branch**
+
+```text
+[1] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: [] (empty)
+      →    branch: empty search, stopping
+
+try 1: stopped early — I couldn't find a matching item. Try increasing your maximum price, changing the size, or using broader search terms.
 ```
 
----
+**Criterion 3 — `agent.py::run_agent` / `suggest_outfit` state verification**
 
+```text
+Try 1: selected_id=lst_002, passed_to_suggest_outfit=lst_002, PASS=True
+Try 2: selected_id=lst_002, passed_to_suggest_outfit=lst_002, PASS=True
+Try 3: selected_id=lst_002, passed_to_suggest_outfit=lst_002, PASS=True
+Try 4: selected_id=lst_002, passed_to_suggest_outfit=lst_002, PASS=True
+Try 5: selected_id=lst_002, passed_to_suggest_outfit=lst_002, PASS=True
+```
+
+**Criterion 4 — `tools.py::suggest_outfit` → `tools.py::create_fit_card`**
+
+```text
+Outfit suggestion:
+
+Top (New): Y2K Baby Tee — Butterfly Print
+Bottoms: Baggy straight-leg jeans, dark wash
+Outerwear: Vintage black denim jacket
+Shoes: Chunky white sneakers
+Accessories: Black crossbody bag
+
+Fit card:
+
+Serving major early 2000s energy with this dreamy Y2K Butterfly Baby Tee!
+Available on depop for just $18.0, I’m styling it with baggy dark-wash jeans
+and chunky white sneakers for the ultimate retro streetwear contrast.
+It’s the perfect blend of cute and effortless—grab it before it’s gone!
+```
+
+**Criterion 5 — `search_listings` through `mcp_client.call_tool`**
+
+```text
+[
+  ('Y2K Baby Tee — Butterfly Print', 18.0),
+  ('Mesh Long-Sleeve Top — Black', 15.0),
+  ('Vintage Band Tee — Faded Grey', 19.0)
+]
+
+ALL <= 20: True
+```
+
+The baseline evaluation was run with caching disabled using:
+
+```text
+python run_eval.py --label before
+```
+
+The complete evaluation evidence was saved to:
+
+```text
+results/run_2026-10-11_2046_before.md
+```
 ## Verdicts and Diagnoses
 
 <!-- MET or MISSED per criterion against LAST UNIT's target, plus a sentence on
