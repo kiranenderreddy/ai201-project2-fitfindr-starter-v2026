@@ -6,7 +6,7 @@ which tool to run next based on what the last one returned.
 
 If your loop calls all three tools no matter what comes back, you have a list
 of function calls. A loop looks at the last result before it picks the next
-step. **That branch is the graded part of this unit.**
+step. That branch is the graded part of this unit.
 
 Build and test your three tools in `tools.py` first. Then come here.
 
@@ -17,12 +17,14 @@ import re
 
 import config
 import trace
+
 from tools import (
-    search_listings,
     suggest_outfit,
     create_fit_card,
     compare_prices,
 )
+
+from mcp_client import call_tool
 from generate import ModelUnavailable
 
 
@@ -34,24 +36,18 @@ def new_session(query: str, wardrobe: dict) -> dict:
 
     The session is the single source of truth for a run. Every tool result goes
     in here, and the next tool reads it back out.
-
-    You could pass values straight from one call to the next. It would work,
-    and you would not be able to test it — you can't print a variable you have
-    already overwritten. Going through the session is what makes the state
-    visible, and unit 4 has you write a criterion about exactly that.
-
-    Add fields if you need them.
     """
+
     return {
-        "query": query,              # what the user typed
-        "parsed": {},                # description / size / max_price
-        "search_results": [],        # everything search_listings returned
-        "selected_item": None,       # the one chosen from search results
-        "price_comparison": None,    # stretch tool result
-        "wardrobe": wardrobe,        # the user's wardrobe
-        "outfit_suggestion": None,   # what suggest_outfit returned
-        "fit_card": None,            # what create_fit_card returned
-        "error": None,               # set when the run ended early
+        "query": query,
+        "parsed": {},
+        "search_results": [],
+        "selected_item": None,
+        "price_comparison": None,
+        "wardrobe": wardrobe,
+        "outfit_suggestion": None,
+        "fit_card": None,
+        "error": None,
     }
 
 
@@ -59,17 +55,14 @@ def new_session(query: str, wardrobe: dict) -> dict:
 
 def run_agent(query: str, wardrobe: dict) -> dict:
     """
-    Run the loop once and return the finished session.
+    Run the FitFindr planning loop once and return the finished session.
 
     Args:
-        query:    what the user asked for, in plain language
-                  (e.g. "vintage graphic tee under $30, size M").
-        wardrobe: a wardrobe dict — get_example_wardrobe() or
-                  get_empty_wardrobe() from utils/data_loader.py.
+        query: What the user asked for in plain language.
+        wardrobe: A wardrobe dictionary.
 
     Returns:
-        The session dict. Check session["error"] first — if it isn't None,
-        the run ended early and the later fields will still be None.
+        The completed session dictionary.
     """
 
     # ------------------------------------------------------------------
@@ -89,6 +82,7 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     # under $30
     # below 30
     # up to $40
+    # max $50
     # maximum $50
     price_match = re.search(
         r"(?:under|below|up to|max(?:imum)?)\s*\$?\s*(\d+(?:\.\d+)?)",
@@ -153,7 +147,7 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         flags=re.IGNORECASE,
     )
 
-    # Save parsed values in session
+    # Store parsed values in session
     session["parsed"] = {
         "description": description,
         "size": size,
@@ -173,14 +167,17 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         trace.check_iterations(iteration_count)
 
         # --------------------------------------------------------------
-        # STEP 1 — Search listings
+        # STEP 1 — Search listings through MCP
         # --------------------------------------------------------------
         if step == "search":
 
-            session["search_results"] = search_listings(
-                description=session["parsed"]["description"],
-                size=session["parsed"]["size"],
-                max_price=session["parsed"]["max_price"],
+            session["search_results"] = call_tool(
+                "search_listings",
+                {
+                    "description": session["parsed"]["description"],
+                    "size": session["parsed"]["size"],
+                    "max_price": session["parsed"]["max_price"],
+                },
             )
 
             # ----------------------------------------------------------
@@ -197,7 +194,7 @@ def run_agent(query: str, wardrobe: dict) -> dict:
 
                 return session
 
-            # Choose first / best result
+            # Choose the first / best result
             session["selected_item"] = session["search_results"][0]
 
             # Move to stretch tool
