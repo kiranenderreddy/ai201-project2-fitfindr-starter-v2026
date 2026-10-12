@@ -394,78 +394,95 @@ changing the size, or using broader search terms.
 
 ## The Improvement
 
-
-
-<!-- What you changed, why your diagnosis pointed at it, and the after-run in
-     the same table format. One change, measured properly.
-
-     `python run_eval.py --label after` -->
-
 **What I changed:**
 
+I made one targeted change to the `create_fit_card` prompt in `tools.py`.
+
+Before:
+
+```text
+- Include at least one specific styling detail from the outfit suggestion.
+```
+
+After:
+
+```text
+- REQUIRED: Include at least one specific named wardrobe piece or concrete styling detail from the outfit suggestion; do not replace it with generic styling language.
+```
+
+I made only this one change before running the complete evaluation again.
+
 **Which failure it was meant to fix:**
+
+No acceptance criterion failed in the baseline evaluation. However, Criterion 4 was the most model-dependent part of the system. The fit-card generator could potentially satisfy the rest of the prompt while replacing the outfit recommendation with generic styling language.
+
+The change was intended to reduce that model-output risk by explicitly requiring the generated fit card to carry at least one named wardrobe piece or concrete styling detail from the outfit suggestion.
 
 ### Run Log — After
 
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
+| 1. Matching query completes all three required tools and returns a fit card | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 2. Impossible query stops before suggest_outfit and returns an actionable message | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 3. Selected listing is preserved through session state and passed to suggest_outfit | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 4. Fit card includes the selected item and at least one specific styling detail from the outfit suggestion | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 5. Search results respect the requested maximum price | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+
+**After-run Criterion 4 examples:**
+
+```text
+Try 1:
+Fit card:
+Channel total Y2K streetwear energy with this adorable Butterfly Print
+Baby Tee... Style it with baggy straight-leg jeans in a dark wash and
+chunky white sneakers...
+
+Try 2:
+Fit card:
+Snagged this adorable Y2K Butterfly Baby Tee... I'm styling it with
+baggy straight-leg jeans and chunky white sneakers...
+
+Try 3:
+Fit card:
+Just scored this dreamy Y2K Butterfly Print Baby Tee... My favorite way
+to style it is with baggy straight-leg jeans and chunky white sneakers...
+
+Try 4:
+Fit card:
+Channel total 2000s energy with this dreamy Y2K Butterfly Baby Tee...
+I styled it with baggy dark-wash straight-leg jeans...
+Finish the look with chunky white sneakers...
+
+Try 5:
+Fit card:
+Scored this adorable Y2K Butterfly Baby Tee... I can't wait to style it
+with baggy straight-leg jeans and chunky white sneakers...
+```
+
+The full after-run evidence was saved to:
+
+```text
+results/run_2026-10-11_2102_after.md
+```
 
 **Did it help, and how do I know:**
 
-<!-- If it made things worse, say that. Honestly reported, that earns full
-     credit and is more interesting than one that worked. -->
+The change did not increase the numerical pass rate because Criterion 4 had already passed 5 of 5 baseline tries. After the change, it again passed 5 of 5.
 
+However, the after-run output shows that every fit card continued to include concrete styling information taken from the outfit suggestion, such as baggy straight-leg jeans, chunky white sneakers, a vintage black denim jacket, wide-leg khaki trousers, or a brown leather belt.
 
+Therefore, there was no measurable improvement in the acceptance-criterion score because the baseline was already at the ceiling, but the prompt now expresses the requirement more explicitly and reduces the risk of future generic model responses.
 
 ---
 
 ## What's Still Broken
 
-<!-- For each criterion still missed: what you'd do, and why you stopped where
-     you did. "I ran out of time" is fine if it's true. Pretending nothing is
-     left is not. -->
+No acceptance criteria remain missed after the improvement. All five criteria were MET in both the before and after evaluations.
 
+The evaluation is still limited in coverage. Several criteria repeatedly use the same `vintage graphic tee under $30` query, which consistently selects the same Y2K Butterfly Baby Tee. This demonstrates repeatability for that path but does not prove the same quality for every clothing category, price range, size, or wardrobe combination.
 
+The outfit suggestion and fit-card tools also depend on model-generated output. Even with a stronger prompt, future responses can vary. A larger evaluation set containing different item categories and wardrobes would provide stronger evidence of reliability.
 
-<!-- ═════════════════════════════════════════════════════════════════════
+The MCP migration itself did not change the search behavior. `search_listings` now runs through `mcp_client.call_tool`, while filtering, selected-item behavior, and the empty-search branch continued to behave correctly in both evaluation runs.
 
-     SUBMISSION CHECKLIST — unit 3
-
-       [ ] criteria.md has five numbered criteria, each with a target
-       [ ] Each criterion has a reason underneath it
-       [ ] All five unit 3 sections above have real content
-       [ ] Tool Inventory: all three tools, inputs WITH TYPES, a specific
-           return value, and the empty case
-       [ ] Planning Loop names the branch rule and agent.py::run_agent
-       [ ] Sample Run: one full query plus the three per-tool tests, as text
-       [ ] At least four new commits
-       [ ] Repository URL submitted — WRITE IT DOWN, you submit the same one
-           next unit
-
-     SUBMISSION CHECKLIST — unit 4
-
-       [ ] mcp_server.py exists with one tool registered
-           (or a written record of exactly where the rewire broke)
-       [ ] Run Log — Before, five criteria, five tries each
-       [ ] Real output pasted underneath, naming file and function
-       [ ] A verdict on every criterion
-       [ ] A diagnosis for every miss, naming a place AND a mechanism
-       [ ] Loop Trace, with the MCP call visible in it
-       [ ] All three failure modes triggered and handled
-       [ ] One improvement, with Run Log — After in the same format
-       [ ] What's Still Broken
-       [ ] At least four new commits
-       [ ] The SAME repository URL as last unit
-
-     Do not delete and recreate this repository. Your commit history is what
-     shows your criteria existed before your results did.
-     ═════════════════════════════════════════════════════════════════════ -->
-
----
-
-📖 **How to run this project: [RUNNING.md](RUNNING.md)**
+I stopped after this single measured improvement because the assignment requires one diagnosis-driven change and a complete before/after evaluation. A useful next step would be to expand the scenarios to cover several different clothing categories and wardrobe combinations.

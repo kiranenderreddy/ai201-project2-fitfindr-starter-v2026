@@ -304,7 +304,7 @@ Requirements:
 - Mention the selected item.
 - Mention its price exactly once.
 - Mention its platform exactly once.
-- Include at least one specific styling detail from the outfit suggestion.
+- REQUIRED: Include at least one specific named wardrobe piece or concrete styling detail from the outfit suggestion; do not replace it with generic styling language.
 - Describe the overall vibe.
 - Make it sound like a caption someone would actually post.
 """
