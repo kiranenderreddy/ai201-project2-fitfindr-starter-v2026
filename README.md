@@ -324,31 +324,23 @@ results/run_2026-10-11_2046_before.md
 ```
 ## Verdicts and Diagnoses
 
-<!-- MET or MISSED per criterion against LAST UNIT's target, plus a sentence on
-     how you decided.
-
-     Then, for every miss: which of the four places it happened — a tool, the
-     loop's branch, the session, or the model's output — AND the mechanism.
-
-     Not a diagnosis:  "The fit card was bad."
-     A diagnosis:      "The fit card criterion missed on 2 of 5 items. Both had
-                        an empty brand field. My prompt puts the brand in the
-                        first sentence, so the card opened with a blank and read
-                        like a fragment. The tool worked; the prompt assumed a
-                        field that isn't always there."
-
-     Look for a pattern. Three misses on the same tool is one problem, not
-     three. -->
-
 | # | Criterion | Target | Verdict | How I decided |
 |---|---|---|---|---|
-| 1 |  |  |  |  |
-| 2 |  |  |  |  |
-| 3 |  |  |  |  |
-| 4 |  |  |  |  |
-| 5 |  |  |  |  |
+| 1 | Matching query completes all three required tools and returns a fit card | 4 of 5 | MET (5/5) | All five runs successfully completed the MCP search, outfit suggestion, and fit-card generation steps and returned a non-empty fit card. |
+| 2 | Impossible query stops before suggest_outfit and returns an actionable message | 5 of 5 | MET (5/5) | All five impossible searches returned an empty result, stopped at the branch before suggest_outfit, and told the user to change the price, size, or search terms. |
+| 3 | Selected listing is preserved through session state and passed to suggest_outfit | 5 of 5 | MET (5/5) | In all five checks, session selected_item had ID `lst_002` and the item passed into suggest_outfit also had ID `lst_002`. |
+| 4 | Fit card includes the selected item and at least one specific styling detail from the outfit suggestion | 4 of 5 | MET (5/5) | Every fit card named the selected Y2K Butterfly Baby Tee and carried over at least one specific styling detail such as baggy dark-wash jeans, chunky white sneakers, or the vintage black denim jacket. |
+| 5 | Search results respect the requested maximum price | 5 of 5 | MET (5/5) | The $20 search returned listings priced at $18, $15, and $19. No returned listing exceeded the requested maximum price. |
 
 **Diagnoses**
+
+No acceptance criteria were missed in the baseline evaluation. All five criteria met or exceeded their original targets.
+
+The MCP search tool behaved consistently, including maximum-price filtering. The empty-search branch also behaved correctly and stopped the planning loop before downstream model tools were called. Session state preserved the selected listing correctly between steps, and the model-generated outfit suggestions and fit cards satisfied the content criterion in all five attempts.
+
+The main weakness exposed by the evaluation is that Criteria 1, 3, and 4 use the same successful query and selected item repeatedly. This proves repeatability for that item, but it does not strongly test whether the same behavior holds for different clothing types or styling combinations.
+
+Criterion 4 is also the most model-dependent criterion. It passed 5 of 5 times, but the fit-card generation depends on the model carrying a concrete styling detail from the outfit suggestion into the final card. That is the area I would strengthen first because a future model response could still produce a generic fit card even though the current five tries passed.
 
 
 
